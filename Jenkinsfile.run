@@ -1,0 +1,105 @@
+#!/usr/bin/env groovy
+// @Library('devops-jenkins-ci@main') _
+// final script: this
+
+void call(){
+        pipeline {
+        agent any
+        environment {
+            AWS_REGION = 'ap-southeast-1'
+            ECR_REGISTRY = '018811972711.dkr.ecr.ap-southeast-1.amazonaws.com'
+            IMAGE_NAME = 'my-image'
+            IMAGE_TAG = 'latest'
+            ECR_REPOSITORY = 'private-example'
+            HELM_CHART_NAME = 'tan-chart'
+            HELM_RELEASE_NAME = 'my-release'
+        }
+        stages {
+            stage('Build') {
+                steps {
+                    script {
+                        sh "docker build -t $IMAGE_NAME_BE:$IMAGE_TAG ./src/backend/Dockerfile"
+                        sh "docker build -t $IMAGE_NAME_FE:$IMAGE_TAG ./src/fronend/Dockerfile"
+                    }
+                }
+            }
+            stage('Push to ECR') {
+                steps {
+                    script {
+                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'awskey', credentialsId: 'awskey', secretKeyVariable: 'awssecret']]) {
+                            docker.withRegistry("${ECR_REGISTRY}", 'ecr') {
+                                sh "docker push 018811972711.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG"
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Deploy to EKS') {
+                steps {
+                    script {
+                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', accessKeyVariable: 'awskey', credentialsId: 'awskey', secretKeyVariable: 'awssecret']]) {
+                            helmUpgrade(
+                                releaseName: "${HELM_RELEASE_NAME}",
+                                chart: "${HELM_CHART_NAME}",
+                                namespace: "default",
+                                additionalValues: [
+                                    image: "${ECR_REGISTRY}/${IMAGE_NAME_BE}:${IMAGE_TAG}"
+                                ]
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// void call() {
+//         pipeline {
+//         agent any
+//         environment {
+//             AWS_REGION = 'ap-southeast-1'
+//             AWS_ACCOUNT_ID = '018811972711'
+//             IMAGE_NAME_BE = 'tan-be'
+//             IMAGE_NAME_FE = 'tan-fe'
+//             IMAGE_TAG = 'latest'
+//             ECR_REPOSITORY = 'private-example'
+//             EKS_CLUSTER_NAME = 'eks-tan'
+//             HELM_CHART_NAME = 'my-chart'
+//         }
+//         stages {
+//             stage('Build') {
+//                 steps {
+                    
+//                         // Build the Docker image
+//                     sh "docker build -t $IMAGE_NAME_BE:$IMAGE_TAG ./src/backend/Dockerfile"
+//                     sh "docker build -t $IMAGE_NAME_FE:$IMAGE_TAG ./src/fronend/Dockerfile"
+//                 }
+//             }
+//             stage('Push to ECR') {
+//                 steps {
+//                     // Authenticate with ECR
+                    
+                    // sh "aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+
+                    // // Tag the Docker image
+                    // sh "docker tag $IMAGE_NAME_BE:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG"
+                    // sh "docker tag $IMAGE_NAME_FE:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG"
+
+                    // // Push the Docker image to ECR
+                    // sh "docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG"
+                    
+//                 }
+//             }
+//             // stage('Deploy to EKS') {
+//             //     steps {
+//             //         // Authenticate with EKS
+//             //         sh "aws eks update-kubeconfig --name $EKS_CLUSTER_NAME --region $AWS_REGION"
+
+//             //         // Deploy the Helm chart
+//             //         sh "helm upgrade --install $HELM_CHART_NAME ./helm-chart --set image.repository=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY,image.tag=$IMAGE_TAG"
+//             //     }
+//             // }
+//         }
+//     }
+// }
